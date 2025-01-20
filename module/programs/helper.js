@@ -433,10 +433,9 @@ module.exports = class ProgramsHelper {
     return new Promise( async (resolve, reject) => {
 
       try {
-
         let programDocument = [];
 
-        let matchQuery = { status : constants.common.ACTIVE };
+        let matchQuery = { status: constants.common.ACTIVE };
 
         if( Object.keys(filter).length > 0 ) {
           matchQuery = _.merge(matchQuery,filter);
@@ -498,6 +497,8 @@ module.exports = class ProgramsHelper {
        
         programDocument.push({ $match : matchQuery }, sortQuery,{ $project : projection1 }, facetQuery, projection2);
        
+        
+
         let programDocuments = 
         await database.models.programs.aggregate(programDocument);
 
@@ -529,7 +530,7 @@ module.exports = class ProgramsHelper {
    * @returns {JSON} - List of programs based on role and location.
    */
 
-  static forUserRoleAndLocation( bodyData, pageSize, pageNo,searchText = "" ) {
+  static forUserRoleAndLocation( bodyData, pageSize, pageNo,searchText = "",programId = "" ) {
 
     return new Promise(async (resolve, reject) => {
 
@@ -542,6 +543,12 @@ module.exports = class ProgramsHelper {
         if( !queryData.success ) {
           return resolve(queryData);
         }
+        
+        if (programId !== "") {
+          queryData.data._id = gen.utils.convertStringToObjectId(programId);
+        }
+        queryData.data.startDate = { $lte: new Date() };
+        queryData.data.endDate = { $gte: new Date() };
 
         let targetedPrograms = await this.list(
           pageNo,
