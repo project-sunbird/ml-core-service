@@ -11,7 +11,6 @@ const entityTypesHelper = require(MODULES_BASE_PATH + "/entityTypes/helper");
 const entitiesHelper = require(MODULES_BASE_PATH + "/entities/helper");
 const userRolesHelper = require(MODULES_BASE_PATH + "/user-roles/helper");
 const userService = require(ROOT_PATH + "/generics/services/users");
-
 /**
     * ProgramsHelper
     * @class
@@ -70,10 +69,11 @@ module.exports = class ProgramsHelper {
    * @method
    * @name create
    * @param {Array} data 
+   * @param {Boolean} checkDate to accommodate timezone difference in the sent date
    * @returns {JSON} - create program.
    */
 
-  static create(data) {
+  static create(data, checkDate = false) {
 
     return new Promise(async (resolve, reject) => {
 
@@ -105,7 +105,27 @@ module.exports = class ProgramsHelper {
           "components" : [],
           "isAPrivateProgram" : data.isAPrivateProgram ? data.isAPrivateProgram : false  
         }
+
+        if (checkDate) {
+          if (data.hasOwnProperty("endDate")) {
+            data.endDate = gen.utils.getEndDate(
+              data.endDate,
+              process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+            );
+          }
+          if (data.hasOwnProperty("startDate")) {
+            data.startDate = gen.utils.getStartDate(
+              data.startDate,
+              process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+            );
+          }
+        }
+
+        _.assign(programData, {
+          ...data,
+        });
         
+        programData = _.omit(programData, ["scope", "userId"]);
         let program = await database.models.programs.create(
           programData
         );
@@ -327,10 +347,11 @@ module.exports = class ProgramsHelper {
    * @param {String} programId - program id.
    * @param {Array} data 
    * @param {String} userId
+   * @param {Boolean} checkDate to accommodate timezone difference in the sent date
    * @returns {JSON} - update program.
    */
 
-  static update(programId,data,userId) {
+  static update(programId,data,userId, checkDate = false) {
 
     return new Promise( async (resolve, reject) => {
 
@@ -339,6 +360,20 @@ module.exports = class ProgramsHelper {
         data.updatedBy = userId;
         data.updatedAt = new Date();
 
+        if (checkDate) {
+          if (data.hasOwnProperty("endDate")) {
+            data.endDate = gen.utils.getEndDate(
+              data.endDate,
+              process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+            );
+          }
+          if (data.hasOwnProperty("startDate")) {
+            data.startDate = gen.utils.getStartDate(
+              data.startDate,
+              process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+            );
+          }
+        }
         let program = await database.models.programs.findOneAndUpdate({
           _id : programId
         },{ $set : _.omit(data,["scope"]) }, { new: true });
@@ -398,10 +433,9 @@ module.exports = class ProgramsHelper {
     return new Promise( async (resolve, reject) => {
 
       try {
-
         let programDocument = [];
 
-        let matchQuery = { status : constants.common.ACTIVE };
+        let matchQuery = { status: constants.common.ACTIVE };
 
         if( Object.keys(filter).length > 0 ) {
           matchQuery = _.merge(matchQuery,filter);
@@ -463,6 +497,8 @@ module.exports = class ProgramsHelper {
        
         programDocument.push({ $match : matchQuery }, sortQuery,{ $project : projection1 }, facetQuery, projection2);
        
+        
+
         let programDocuments = 
         await database.models.programs.aggregate(programDocument);
 
@@ -494,7 +530,7 @@ module.exports = class ProgramsHelper {
    * @returns {JSON} - List of programs based on role and location.
    */
 
-  static forUserRoleAndLocation( bodyData, pageSize, pageNo,searchText = "" ) {
+  static forUserRoleAndLocation( bodyData, pageSize, pageNo,searchText = "",programId = "" ) {
 
     return new Promise(async (resolve, reject) => {
 
@@ -507,6 +543,12 @@ module.exports = class ProgramsHelper {
         if( !queryData.success ) {
           return resolve(queryData);
         }
+        
+        if (programId !== "") {
+          queryData.data._id = gen.utils.convertStringToObjectId(programId);
+        }
+        queryData.data.startDate = { $lte: new Date() };
+        queryData.data.endDate = { $gte: new Date() };
 
         let targetedPrograms = await this.list(
           pageNo,

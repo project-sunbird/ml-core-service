@@ -99,16 +99,17 @@ module.exports = class SolutionsHelper {
    * @method 
    * @name createSolution
    * @param {Object} solutionData - solution creation data.
+   * @param {Boolean} checkDate to accommodate timezone difference in the sent date
    * @returns {JSON} solution creation data. 
    */
   
-   static createSolution(solutionData) {
+   static createSolution(solutionData, checkDate = false) {
     return new Promise(async (resolve, reject) => {
         try {
 
           let programData = await programsHelper.programDocuments({
             externalId : solutionData.programExternalId
-          },["name","description","scope"]);
+          },["name","description","scope","endDate", "startDate"]);
 
           if ( !programData.length > 0 ) {
             throw {
@@ -179,6 +180,27 @@ module.exports = class SolutionsHelper {
 
           solutionData.status = constants.common.ACTIVE;
     
+          if (checkDate) {
+            if (solutionData.hasOwnProperty("endDate")) {
+              solutionData.endDate = gen.utils.getEndDate(
+                solutionData.endDate,
+                process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+              );
+              if (solutionData.endDate > programData[0].endDate) {
+                solutionData.endDate = programData[0].endDate;
+              }
+            }
+            if (solutionData.hasOwnProperty("startDate")) {
+              solutionData.startDate = gen.utils.getStartDate(
+                solutionData.startDate,
+                process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+              );
+              if (solutionData.startDate < programData[0].startDate) {
+                solutionData.startDate = programData[0].startDate;
+              }
+            }
+          }
+
           let solutionCreation = 
           await database.models.solutions.create(
             _.omit(solutionData,["scope"])
@@ -396,10 +418,11 @@ module.exports = class SolutionsHelper {
    * @name update
    * @param {String} solutionId - solution id.
    * @param {Object} solutionData - solution creation data.
+   * @param {Boolean} checkDate to accommodate timezone difference in the sent date
    * @returns {JSON} solution creation data. 
    */
   
-   static update(solutionId, solutionData, userId) {
+   static update(solutionId, solutionData, userId, checkDate = false) {
     return new Promise(async (resolve, reject) => {
         try {
 
@@ -407,8 +430,10 @@ module.exports = class SolutionsHelper {
             _id : solutionId
           };
 
-          let solutionDocument = 
-          await this.solutionDocuments(queryObject, ["_id"]);
+          let solutionDocument = await this.solutionDocuments(queryObject, [
+            "_id",
+            "programId",
+          ]);
 
           if (!solutionDocument.length > 0 ) {
             return resolve({
@@ -416,6 +441,44 @@ module.exports = class SolutionsHelper {
               message: constants.apiResponses.SOLUTION_NOT_FOUND
             });
           }
+
+          if (
+            checkDate &&
+            (solutionData.hasOwnProperty("startDate") ||
+              solutionData.hasOwnProperty("endDate"))
+          ) {
+            let programData = await programsHelper.programDocuments(
+              {
+                _id: solutionDocument[0].programId,
+              },
+              ["_id", "endDate", "startDate"]
+            );
+  
+            if (!programData.length > 0) {
+              throw {
+                message: constants.apiResponses.PROGRAM_NOT_FOUND,
+              };
+            }
+            if (solutionData.hasOwnProperty("endDate")) {
+              solutionData.endDate = gen.utils.getEndDate(
+                solutionData.endDate,
+                process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+              );
+              if (solutionData.endDate > programData[0].endDate) {
+                solutionData.endDate = programData[0].endDate;
+              }
+            }
+            if (solutionData.hasOwnProperty("startDate")) {
+              solutionData.startDate = gen.utils.getStartDate(
+                solutionData.startDate,
+                process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC
+              );
+              if (solutionData.startDate < programData[0].startDate) {
+                solutionData.startDate = programData[0].startDate;
+              }
+            }
+          }
+  
 
           let updateObject = {
             "$set" : {}
@@ -648,10 +711,20 @@ module.exports = class SolutionsHelper {
             matchQuery["$or"] = [];
   
             targetedTypes.forEach( type => {
-              
-              let singleType = {
-                type : type
-              };
+              let singleType = {};
+              if (type === constants.common.SURVEY) {
+                singleType = {
+                  type: type,
+                };
+                const currentDate = new Date();
+                currentDate.setDate(currentDate.getDate() - 15);
+                singleType["endDate"] = { $gte: currentDate };
+              } else {
+                singleType = {
+                  type: type,
+                };
+                singleType["endDate"] = { $gte: new Date() };
+              }
   
               if( type === constants.common.IMPROVEMENT_PROJECT ) {
                 singleType["projectTemplateId"] = { $exists : true };
@@ -664,7 +737,15 @@ module.exports = class SolutionsHelper {
             if( type !== "" ) {
               matchQuery["type"] = type;
             }
-        
+
+            if (type === constants.common.SURVEY) {
+              const currentDate = new Date();
+              currentDate.setDate(currentDate.getDate() - 15);
+              matchQuery["endDate"] = { $gte: currentDate };
+            } else {
+              matchQuery["endDate"] = { $gte: new Date() };
+            }
+
             if( subType !== "" ) {
               matchQuery["subType"] = subType;
             }
@@ -673,6 +754,8 @@ module.exports = class SolutionsHelper {
           if ( programId !== "" ) {
             matchQuery["programId"] = ObjectId(programId);
           }
+          
+          matchQuery["startDate"] = { $lte: new Date() };
           
           let targetedSolutions = await this.list(
             type,
@@ -838,7 +921,8 @@ module.exports = class SolutionsHelper {
             "language",
             "creator",
             "link",
-            "certificateTemplateId"
+            "certificateTemplateId",
+            "endDate"
           ]
         );
         
