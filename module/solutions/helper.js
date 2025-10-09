@@ -14,7 +14,8 @@ const improvementProjectService = require(ROOT_PATH + '/generics/services/improv
 const appsPortalBaseUrl = process.env.APP_PORTAL_BASE_URL + "/" ;
 const userExtensionsHelperV2 = require(MODULES_BASE_PATH + "/user-extension/helperv2");
 const userService = require(ROOT_PATH + "/generics/services/users");
-
+const moment = require('moment-timezone');
+const timeZoneDifference = process.env.TIMEZONE_DIFFRENECE_BETWEEN_LOCAL_TIME_AND_UTC;
 /**
     * SolutionsHelper
     * @class
@@ -1575,7 +1576,14 @@ module.exports = class SolutionsHelper {
           userId,
           userToken
         );
-        
+
+        if(!verifySolution.success){
+          throw {
+            status : httpStatusCode["bad_request"].status,
+            message :  verifySolution.message ? verifySolution.message : messageConstants.apiResponses.INVALID_LINK
+          }
+        }
+
         let checkForTargetedSolution = await this.checkForTargetedSolution(
           link,
           bodyData,
@@ -1724,7 +1732,7 @@ module.exports = class SolutionsHelper {
               $ne: constants.common.INACTIVE,
             },
           },
-          ["type", "status", "endDate"]
+          ["type", "status", "endDate", "startDate"]
         );
 
         if ( !Array.isArray(solutionData) || solutionData.length < 1 ) {
@@ -1736,7 +1744,15 @@ module.exports = class SolutionsHelper {
 
         if ( solutionData[0].status !== constants.common.ACTIVE ) {
           return resolve({
-            message: constants.apiResponses.LINK_IS_EXPIRED,
+            message: constants.apiResponses.INVALID_LINK,
+            result: [],
+          });
+        }
+
+        // check start date is greater than current date
+        if(solutionData[0].startDate && new Date() < new Date(solutionData[0].startDate)){
+          return resolve({
+            message: constants.apiResponses.LINK_IS_NOT_ACTIVE_YET+moment(solutionData[0].startDate).utc().utcOffset(timeZoneDifference).add(1, "minute").format("ddd, D MMM YYYY, hh:mm A"),
             result: [],
           });
         }
@@ -1766,6 +1782,7 @@ module.exports = class SolutionsHelper {
         return resolve({
           message: constants.apiResponses.LINK_VERIFIED,
           result: response,
+          success:true
         });
       } 
       catch (error) {
