@@ -194,4 +194,5 @@ module.exports = {
   "CERTIFICATE_BASE_TEMPLATE_UPDATED" : "Base template updated successfully",
   "CERTIFICATE_BASE_TEMPLATE_NOT_UPDATED" : "Base template updation failed",
   "LINK_IS_NOT_ACTIVE_YET":'The link has not started yet. Please try again from: ' ,
+  "NO_SOLUTION_FOUND_FOR_THE_LINK": 'This link appears to be invalid. Please use a valid link to continue.',
 };

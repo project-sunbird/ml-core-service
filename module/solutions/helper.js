@@ -825,9 +825,11 @@ module.exports = class SolutionsHelper {
             message : constants.apiResponses.NO_LOCATION_ID_FOUND_IN_DATA
           }
         }
-        
+
+        let caseInsensitiveRoles = [constants.common.ALL_ROLES,...data.role.split(",")].map(role => new RegExp(`^${role}$`, "i"));
+
         let filterQuery = {
-          "scope.roles.code" : { $in : [constants.common.ALL_ROLES,...data.role.split(",")] },
+          "scope.roles.code" : { $in : caseInsensitiveRoles },
           "scope.entities" : { $in : registryIds },
           "scope.entityType" : { $in : entityTypes },
           "isReusable" : false,
@@ -1661,10 +1663,10 @@ module.exports = class SolutionsHelper {
           userToken
         );
 
-        if(!verifySolution.success){
+        if(verifySolution.returnError){
           throw {
             status : httpStatusCode["bad_request"].status,
-            message :  verifySolution.message ? verifySolution.message : messageConstants.apiResponses.INVALID_LINK
+            message :  verifySolution.message ? verifySolution.message : constants.apiResponses.INVALID_LINK
           }
         }
 
@@ -1679,7 +1681,7 @@ module.exports = class SolutionsHelper {
         }
         
         let solutionData = checkForTargetedSolution.result;
-
+        let isSolutionActive = solutionData.status === constants.common.INACTIVE ? false : true;
         if( solutionData.type == constants.common.OBSERVATION ) {
           // Targeted solution
           if(checkForTargetedSolution.result.isATargetedSolution) {
@@ -1692,6 +1694,13 @@ module.exports = class SolutionsHelper {
             checkForTargetedSolution.result["observationId"] = (observationDetailFromLink.result && observationDetailFromLink.result._id != "")
                 ? observationDetailFromLink.result._id
                 : "";
+            
+            if (
+              checkForTargetedSolution.result["observationId"] == "" &&
+              !isSolutionActive
+            ) {
+              throw new Error(constants.apiResponses.LINK_IS_EXPIRED);
+            }
 
           }
 
@@ -1742,7 +1751,19 @@ module.exports = class SolutionsHelper {
                   checkTargetedProjectExist.data[0]._id;
               }
 
+              if (
+                !checkForTargetedSolution.result['projectId'] &&
+                !isSolutionActive
+              ) {
+                throw new Error(constants.apiResponses.LINK_IS_EXPIRED);
+              }
+
           } else {
+
+            if(!isSolutionActive) {
+              throw new Error(constants.apiResponses.LINK_IS_EXPIRED);
+            }
+
             //non targeted project exist
             let checkIfUserProjectExistsQuery = {
               createdBy: userId,
@@ -1811,18 +1832,16 @@ module.exports = class SolutionsHelper {
         let solutionData = await this.solutionDocuments(
           {
             link: link,
-            isReusable: false,
-            status: {
-              $ne: constants.common.INACTIVE,
-            },
+            isReusable: false
           },
           ["type", "status", "endDate", "startDate"]
         );
 
         if ( !Array.isArray(solutionData) || solutionData.length < 1 ) {
           return resolve({
-            message: constants.apiResponses.INVALID_LINK,
+            message: constants.apiResponses.NO_SOLUTION_FOUND_FOR_THE_LINK,
             result: [],
+            returnError: true
           });
         }
 
@@ -1838,6 +1857,7 @@ module.exports = class SolutionsHelper {
           return resolve({
             message: constants.apiResponses.LINK_IS_NOT_ACTIVE_YET+moment(solutionData[0].startDate).utc().utcOffset(timeZoneDifference).add(1, "minute").format("ddd, D MMM YYYY, hh:mm A"),
             result: [],
+            returnError:true
           });
         }
 
@@ -1908,7 +1928,8 @@ module.exports = class SolutionsHelper {
           "_id",
           "programId",
           "name",
-          "projectTemplateId"
+          "projectTemplateId",
+          "status"
         ]);
 
         let queryData = await this.queryBasedOnRoleAndLocation(bodyData);
@@ -1918,6 +1939,10 @@ module.exports = class SolutionsHelper {
 
         queryData.data["link"] = link;
         let matchQuery = queryData.data;
+
+        if (matchQuery.status) {
+					delete matchQuery.status
+				}
 
         let solutionData = await this.solutionDocuments(matchQuery, [
           "_id",
@@ -1934,7 +1959,7 @@ module.exports = class SolutionsHelper {
           response.type = solutionDetails[0].type;
           response.name = solutionDetails[0].name;
           response.programId = solutionDetails[0].programId;
-
+          response.status = solutionDetails[0].status;
           return resolve({
             success: true,
             message:
@@ -1947,6 +1972,7 @@ module.exports = class SolutionsHelper {
         Object.assign(response, solutionData[0]);
         response.solutionId = solutionData[0]._id;
         response.projectTemplateId = solutionDetails[0].projectTemplateId ? solutionDetails[0].projectTemplateId : "";
+        response.status = solutionDetails[0].status;
         delete response._id;
 
         return resolve({
