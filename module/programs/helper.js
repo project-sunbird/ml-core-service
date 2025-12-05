@@ -374,6 +374,11 @@ module.exports = class ProgramsHelper {
             );
           }
         }
+        // Convert component IDs to ObjectId if present
+        if (data.components && Array.isArray(data.components)) {
+          data.components = data.components.map(id => ObjectId(id));
+        }
+
         let program = await database.models.programs.findOneAndUpdate({
           _id : programId
         },{ $set : _.omit(data,["scope"]) }, { new: true });
