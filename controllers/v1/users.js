@@ -423,7 +423,7 @@ module.exports = class Users extends Abstract {
         return new Promise(async (resolve, reject) => {
 
             try {
-                
+                console.log("entering entityTypesByLocationAndRole function of users controller",req.query.role);
                 let currentMaximumCountOfRequiredEntities = 0;
                 let requiredEntities = new Array;
                 let roleArray = req.query.role.split(",");
@@ -442,7 +442,7 @@ module.exports = class Users extends Abstract {
                         requiredEntities.result = entitiesMappingData.data;
                     }
                 }
-
+                console.log("requiredEntities", requiredEntities);
                 // entitiesMappingData["result"] = requiredEntities;
                 resolve(requiredEntities);
 

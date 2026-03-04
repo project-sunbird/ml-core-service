@@ -356,6 +356,8 @@ module.exports = class UsersHelper {
                     _id: roleId
                 }, ["entityTypes.entityType"]);
 
+                console.log(rolesData,rolesData.length,roleId, "rolesDocument value --- line no 359")
+
                 if (!rolesData.length > 0) {
                     return resolve({
                         message: constants.apiResponses.USER_ROLES_NOT_FOUND,
@@ -365,9 +367,10 @@ module.exports = class UsersHelper {
                 
                 let subEntities = [];
                 let cacheData= await cache.getValue(entityKey);
-                
-                if( !cacheData ) {
+                console.log(cacheData, "cacheData value --- line no 370")
+                if( !cacheData ) {        
                   subEntities = await formService.configForStateLocation( stateCode,entityKey );
+                  console.log(subEntities, "subEntities value --- line no 373")
                   if( !subEntities.length > 0 ) {
                       return resolve({
                           message : constants.apiResponses.ENTITY_NOT_FOUND,
@@ -418,7 +421,7 @@ module.exports = class UsersHelper {
 
                     forms.push(cloneForm);
                 }
-
+                console.log(forms, "forms value --- line no 424")
                 return resolve({
                     message: constants.apiResponses.ENTITIES_MAPPING_FORM_FETCHED,
                     result: forms
@@ -665,13 +668,14 @@ module.exports = class UsersHelper {
           },
           ["_id", "entityTypes.entityType"]
         );
-        
+        console.log(rolesDocument,rolesDocument.length, "rolesDocument value --- line no 668")
         if (!rolesDocument.length > 0) {
           throw {
             message: constants.apiResponses.USER_ROLES_NOT_FOUND
           };
         }
-        
+        console.log(rolesDocument[0], "rolesDocuments --- line no 674")
+
         let bodyData={};    
         if (gen.utils.checkValidUUID(stateLocationId)) {
           bodyData = {
@@ -683,14 +687,16 @@ module.exports = class UsersHelper {
           };
         }
         
+        console.log(bodyData, "bodyData for location search --- line no 687")
         let entityData = await userService.locationSearch( bodyData );
-        
+        console.log(entityData, "entityData --- line no 689")
         if ( !entityData.success ) {
           throw {
             message: constants.apiResponses.ENTITIES_NOT_EXIST_IN_LOCATION,
           };
         }
-        
+        console.log(entityData.data[0], "entityData --- line no 689")
+
       
         let entityTypes = [];
         let stateEntityExists = false;
@@ -703,8 +709,10 @@ module.exports = class UsersHelper {
         });
         
         if (stateEntityExists) {
+          console.log("entering state block --line no 712")
           entityTypes = [constants.common.STATE_ENTITY_TYPE];
         } else {
+          console.log("entering entitiesMappingForm block --line no 715")
           let entitiesMappingForm = await this.entitiesMappingForm(
             entityData.data[0].code,
             rolesDocument[0]._id,
@@ -715,7 +723,7 @@ module.exports = class UsersHelper {
             entityTypes.push(entitiesMappingData.field);
           });
         }
-
+        
         return resolve({
           success: true,
           message: constants.apiResponses.ENTITY_TYPES_FETCHED,
