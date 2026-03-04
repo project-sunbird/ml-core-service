@@ -72,6 +72,9 @@ async function formRead ( stateLocationCode ) {
             
             const url = 
             process.env.FORM_SERVICE_URL + constants.endpoints.GET_FORM_DATA;
+
+            console.log("URL", url);
+            console.log("bodyData", bodyData);
             
             const options = {
                 headers : {
