@@ -29,6 +29,11 @@ module.exports = class UserRolesHelper {
   ) {
     return new Promise(async (resolve, reject) => {
         try {
+
+            if(filterQuery.code){
+              filterQuery.code = gen.utils.normalizeToLower(filterQuery.code)
+            }
+
             let queryObject = (filterQuery != "all") ? filterQuery : {};
     
             let projection = {}
